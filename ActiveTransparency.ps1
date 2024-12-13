@@ -2,7 +2,6 @@ Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
 public class Win32 {
-    // Struct for ACCENT_POLICY
     [StructLayout(LayoutKind.Sequential)]
     public struct ACCENT_POLICY {
         public int nAccentState;
@@ -11,7 +10,6 @@ public class Win32 {
         public int nAnimationId;
     }
 
-    // Struct for WINDOW_COMPOSITION_ATTRIBUTE_DATA
     [StructLayout(LayoutKind.Sequential)]
     public struct WINDOW_COMPOSITION_ATTRIBUTE_DATA {
         public int nAttribute;
@@ -19,22 +17,11 @@ public class Win32 {
         public int nDataSize;
     }
 
-    // DllImport to call SetWindowCompositionAttribute API
     [DllImport("user32.dll")]
     public static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOW_COMPOSITION_ATTRIBUTE_DATA data);
 
-    // Function to set window transparency
-    public static void SetTransparency(IntPtr hwnd, int opacity) {
-        var accent = new ACCENT_POLICY { 
-            nAccentState = 3, // ACCENT_ENABLE_TRANSPARENTGRADIENT
-            nColor = 0x00000000, // No color for transparency
-            nFlags = 2, // Apply transparency
-            nAnimationId = 0 
-        };
-
-        // Adjust transparency (opacity) - where 255 is fully opaque, and 0 is fully transparent
-        accent.nColor = (int)(255 * opacity / 100); // Set opacity, e.g., 80% opacity.
-
+    public static void SetTransparency(IntPtr hwnd) {
+        var accent = new ACCENT_POLICY { nAccentState = 3 }; // ACCENT_ENABLE_TRANSPARENTGRADIENT
         var accentSize = Marshal.SizeOf(accent);
         var accentPtr = Marshal.AllocHGlobal(accentSize);
         Marshal.StructureToPtr(accent, accentPtr, false);
@@ -45,22 +32,31 @@ public class Win32 {
             nDataSize = accentSize
         };
 
-        // Apply the transparency to the window
         SetWindowCompositionAttribute(hwnd, ref data);
         Marshal.FreeHGlobal(accentPtr);
-    }
-
-    // Function to apply transparency to all open windows
-    public static void ApplyTransparencyToAllWindows() {
-        var processes = System.Diagnostics.Process.GetProcesses();
-        foreach (var process in processes) {
-            if (process.MainWindowHandle != IntPtr.Zero) {
-                SetTransparency(process.MainWindowHandle, 80); // Set 80% opacity
-            }
-        }
     }
 }
 "@
 
-# Apply 80% transparency to all open windows
-[Win32]::ApplyTransparencyToAllWindows()
+# Function to apply transparency to all open windows
+function Apply-TransparencyToWindows {
+    # Get all open windows
+    $windows = Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }
+
+    foreach ($window in $windows) {
+        [Win32]::SetTransparency($window.MainWindowHandle)
+    }
+}
+
+# Function to apply transparency to the taskbar
+function Apply-TransparencyToTaskbar {
+    $taskbarHandle = (Get-Process explorer | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }).MainWindowHandle
+    [Win32]::SetTransparency($taskbarHandle)
+}
+
+# Continuous loop to apply transparency
+while ($true) {
+    Apply-TransparencyToWindows
+    Apply-TransparencyToTaskbar
+    Start-Sleep -Seconds 1 # Adjust the interval if needed
+}
