@@ -28,11 +28,20 @@ public class Win32 {
         DwmExtendFrameIntoClientArea(hwnd, ref margins);
     }
 
+    // Function to enable Acrylic Effect (Acrylic Glass Effect)
+    public static void ApplyAcrylicEffect(IntPtr hwnd) {
+        // This function will simulate an acrylic effect for supported windows (explorer, etc.)
+        // Windows 10/11 automatically applies a background blur or transparency with the right settings
+        MARGINS margins = new MARGINS() { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+    }
+
     // Function to enable transparency globally (i.e., for the taskbar, explorer, etc.)
     public static void ApplyGlobalTransparency() {
         // Apply transparency to the taskbar and Explorer windows
         IntPtr hwnd = GetForegroundWindow();
         ApplyDwmTransparency(hwnd);
+        ApplyAcrylicEffect(hwnd); // Add Acrylic effect
     }
 }
 "@
@@ -44,6 +53,7 @@ function Apply-TransparencyToWindows {
 
     foreach ($window in $windows) {
         [Win32]::ApplyDwmTransparency($window.MainWindowHandle)
+        [Win32]::ApplyAcrylicEffect($window.MainWindowHandle)
     }
 }
 
@@ -52,6 +62,7 @@ function Apply-TransparencyToTaskbar {
     # Apply to Taskbar (Explorer handle)
     $taskbarHandle = (Get-Process explorer | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }).MainWindowHandle
     [Win32]::ApplyDwmTransparency($taskbarHandle)
+    [Win32]::ApplyAcrylicEffect($taskbarHandle)
 
     # Apply to other DWM-managed UI elements (Explorer)
     [Win32]::ApplyGlobalTransparency()
