@@ -1,39 +1,38 @@
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
-public class Win32 {
-    [StructLayout(LayoutKind.Sequential)]
-    public struct ACCENT_POLICY {
-        public int nAccentState;
-        public int nFlags;
-        public int nColor;
-        public int nAnimationId;
-    }
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct WINDOW_COMPOSITION_ATTRIBUTE_DATA {
-        public int nAttribute;
-        public IntPtr pData;
-        public int nDataSize;
-    }
+public class Win32 {
+    // DWM API Functions
+    [DllImport("dwmapi.dll", CharSet = CharSet.Auto)]
+    public static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS pMarInset);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmIsCompositionEnabled(out bool pfEnabled);
 
     [DllImport("user32.dll")]
-    public static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WINDOW_COMPOSITION_ATTRIBUTE_DATA data);
+    public static extern IntPtr GetForegroundWindow();
 
-    public static void SetTransparency(IntPtr hwnd) {
-        var accent = new ACCENT_POLICY { nAccentState = 3 }; // ACCENT_ENABLE_TRANSPARENTGRADIENT
-        var accentSize = Marshal.SizeOf(accent);
-        var accentPtr = Marshal.AllocHGlobal(accentSize);
-        Marshal.StructureToPtr(accent, accentPtr, false);
+    // Struct for MARGINS
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MARGINS {
+        public int Left;
+        public int Right;
+        public int Top;
+        public int Bottom;
+    }
 
-        var data = new WINDOW_COMPOSITION_ATTRIBUTE_DATA {
-            nAttribute = 19, // WCA_ACCENT_POLICY
-            pData = accentPtr,
-            nDataSize = accentSize
-        };
+    // Function to enable transparency on a window
+    public static void ApplyDwmTransparency(IntPtr hwnd) {
+        MARGINS margins = new MARGINS() { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+    }
 
-        SetWindowCompositionAttribute(hwnd, ref data);
-        Marshal.FreeHGlobal(accentPtr);
+    // Function to enable transparency globally (i.e., for the taskbar, explorer, etc.)
+    public static void ApplyGlobalTransparency() {
+        // Apply transparency to the taskbar and Explorer windows
+        IntPtr hwnd = GetForegroundWindow();
+        ApplyDwmTransparency(hwnd);
     }
 }
 "@
@@ -44,14 +43,18 @@ function Apply-TransparencyToWindows {
     $windows = Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }
 
     foreach ($window in $windows) {
-        [Win32]::SetTransparency($window.MainWindowHandle)
+        [Win32]::ApplyDwmTransparency($window.MainWindowHandle)
     }
 }
 
-# Function to apply transparency to the taskbar
+# Function to apply transparency to the taskbar and core UI elements
 function Apply-TransparencyToTaskbar {
+    # Apply to Taskbar (Explorer handle)
     $taskbarHandle = (Get-Process explorer | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }).MainWindowHandle
-    [Win32]::SetTransparency($taskbarHandle)
+    [Win32]::ApplyDwmTransparency($taskbarHandle)
+
+    # Apply to other DWM-managed UI elements (Explorer)
+    [Win32]::ApplyGlobalTransparency()
 }
 
 # Continuous loop to apply transparency
